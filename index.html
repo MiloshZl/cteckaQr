@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Skenování kódů</title>
-  
+  <title>Skenování QR / Čárového kódu</title>
+
   <!-- Bootstrap 5.3 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
   <!-- ZXing knihovna -->
-  <script src="ctecka.js"></script>
+  <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
 
   <style>
     #video {
@@ -20,21 +20,20 @@
       border-radius: 1rem;
       background: black;
     }
-    #status {
-      margin-top: 1rem;
-      font-weight: bold;
-    }
+    #status { margin-top: 1rem; font-weight: bold; }
   </style>
 </head>
 <body class="bg-light">
-
   <div class="container py-4">
-    <h1 class="text-center mb-4">📷 Skenování QR / čárového kódu</h1>
+    <h1 class="text-center mb-4">📷 Skenování QR / Čárového kódu</h1>
 
     <div class="row justify-content-center">
       <div class="col-md-8 text-center">
-        
-        <!-- Video náhled -->
+
+        <!-- Výběr kamery -->
+        <select id="cameraSelect" class="form-select mb-2"></select>
+
+        <!-- Video -->
         <video id="video" autoplay muted playsinline></video>
 
         <!-- Ovládací tlačítka -->
@@ -43,10 +42,8 @@
           <button id="stopBtn" class="btn btn-danger">Zastavit</button>
         </div>
 
-        <!-- Stav -->
         <div id="status" class="text-primary">Připraven</div>
 
-        <!-- Výsledek -->
         <input id="result" class="form-control mt-3 text-center" placeholder="Výsledek" readonly>
       </div>
     </div>
@@ -60,21 +57,50 @@
     const codeReader = new BrowserMultiFormatReader();
     let controls = null;
 
+    const cameraSelect = document.getElementById('cameraSelect');
     const videoElem = document.getElementById('video');
     const statusElem = document.getElementById('status');
     const resultInput = document.getElementById('result');
 
+    // Vyhledej všechny zadní kamery
+    async function loadCameras() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const backCameras = devices.filter(d => d.kind === 'videoinput' &&
+          (d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('zadní')));
+
+        if (backCameras.length === 0) {
+          // fallback – všechny kamery
+          backCameras.push(...devices.filter(d => d.kind === 'videoinput'));
+        }
+
+        cameraSelect.innerHTML = '';
+        backCameras.forEach((cam, i) => {
+          const opt = document.createElement('option');
+          opt.value = cam.deviceId;
+          opt.textContent = cam.label || `Kamera ${i+1}`;
+          cameraSelect.appendChild(opt);
+        });
+
+        statusElem.textContent = `📷 Vyber kameru (zadní pokud je k dispozici)`;
+      } catch (err) {
+        statusElem.textContent = `❌ Chyba při načítání kamer: ${err}`;
+        console.error(err);
+      }
+    }
+
     async function startScan() {
       stopScan();
-      resultInput.value = "";
+      resultInput.value = '';
+      const deviceId = cameraSelect.value;
 
       try {
         controls = await codeReader.decodeFromConstraints(
           {
             video: {
-              width: { ideal: 1920 },   // FullHD
+              deviceId: deviceId ? { exact: deviceId } : undefined,
+              width: { ideal: 1920 },
               height: { ideal: 1080 },
-              facingMode: "environment" // preferuj zadní kameru
             }
           },
           videoElem,
@@ -82,32 +108,15 @@
             if (result) {
               resultInput.value = result.getText();
               statusElem.textContent = "✅ Načteno: " + result.getText();
-              stopScan(); // automaticky zastavit po načtení
+              stopScan();
             }
           }
         );
-        statusElem.textContent = "📡 Skenování běží (1080p)";
+        statusElem.textContent = `📡 Skenování běží (kamera: ${cameraSelect.selectedOptions[0].text})`;
       } catch (err) {
-        statusElem.textContent = "❌ Chyba: " + err;
+        statusElem.textContent = `❌ Chyba: ${err}`;
         console.error(err);
       }
     }
 
     function stopScan() {
-      if (controls) {
-        controls.stop();
-        controls = null;
-      }
-      statusElem.textContent = "⏹️ Skenování zastaveno";
-    }
-
-    document.getElementById("startBtn").addEventListener("click", startScan);
-    document.getElementById("stopBtn").addEventListener("click", stopScan);
-
-    // Kontrola HTTPS
-    if (location.protocol !== "https:" && location.hostname !== "localhost") {
-      statusElem.textContent = "⚠️ Kamera funguje jen na HTTPS nebo localhost!";
-    }
-  </script>
-</body>
-</html>
