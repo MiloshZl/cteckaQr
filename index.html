@@ -120,3 +120,21 @@
     }
 
     function stopScan() {
+      if (controls) {
+        controls.stop();
+        controls = null;
+      }
+      statusElem.textContent = "⏹️ Skenování zastaveno";
+    }
+
+    document.getElementById("startBtn").addEventListener("click", startScan);
+    document.getElementById("stopBtn").addEventListener("click", stopScan);
+
+    loadCameras();
+
+    if (location.protocol !== "https:" && location.hostname !== "localhost") {
+      statusElem.textContent = "⚠️ Kamera funguje jen na HTTPS nebo localhost!";
+    }
+  </script>
+</body>
+</html>
