@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <title>Skenování QR a čárových kódů (ZXing)</title>
+  <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; background:#f4f4f4; margin:0; padding:20px; }
+    #video { width:480px; height:360px; border:2px solid #4CAF50; border-radius:12px; background:black; }
+    select, button, input { margin:8px; padding:8px; font-size:1rem; border-radius:8px; }
+    button { background:#4CAF50; color:white; border:none; cursor:pointer; }
+    #status { margin-top:10px; font-weight:bold; }
+  </style>
+</head>
+<body>
+  <h2>Skenování kódů</h2>
+
+  <!-- výběr kamery + rozlišení -->
+  <select id="cameraSelect"></select>
+  <select id="resolutionSelect">
+    <option value="360">360p</option>
+    <option value="720" selected>720p</option>
+    <option value="1080">1080p</option>
+  </select>
+
+  <div>
+    <button id="startBtn">Spustit</button>
+    <button id="stopBtn">Zastavit</button>
+  </div>
+
+  <div>
+    <video id="video" autoplay muted playsinline></video>
+  </div>
+
+  <div id="status">Připraven</div>
+  <input id="result" placeholder="Výsledek" readonly />
+
+  <script>
+    const { BrowserMultiFormatReader } = window.ZXingBrowser;
+    const codeReader = new BrowserMultiFormatReader();
+    let controls = null;
+
+    const cameraSelect = document.getElementById('cameraSelect');
+    const resolutionSelect = document.getElementById('resolutionSelect');
+    const videoElem = document.getElementById('video');
+    const statusElem = document.getElementById('status');
+    const resultInput = document.getElementById('result');
+
+    async function loadCameras() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        cameraSelect.innerHTML = "";
+        if (videoDevices.length === 0) {
+          const opt = document.createElement("option");
+          opt.textContent = "Žádná kamera nenalezena";
+          cameraSelect.appendChild(opt);
+          statusElem.textContent = "❌ Žádná kamera";
+          return;
+        }
+        videoDevices.forEach((d,i) => {
+          const opt = document.createElement("option");
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Kamera ${i+1}`;
+          cameraSelect.appendChild(opt);
+        });
+        statusElem.textContent = "📷 Kamery načteny";
+      } catch (err) {
+        statusElem.textContent = "Chyba při získávání kamer: " + err;
+      }
+    }
+
+    async function startScan() {
+      stopScan();
+      resultInput.value = "";
+      const deviceId = cameraSelect.value || undefined;
+      const res = parseInt(resolutionSelect.value);
+
+      try {
+        controls = await codeReader.decodeFromConstraints(
+          {
+            video: {
+              deviceId: deviceId ? { exact: deviceId } : undefined,
+              width: { ideal: res },
+              height: { ideal: Math.round(res * 3/4) }, // 4:3 poměr stran
+              facingMode: "environment"
+            }
+          },
+          videoElem,
+          (result, err) => {
+            if (result) {
+              resultInput.value = result.getText();
+              statusElem.textContent = "✅ Načteno: " + result.getText();
+              stopScan(); // zastaví po načtení
+            }
+          }
+        );
+        statusElem.textContent = "📡 Skenování běží na " + res + "p";
+      } catch (err) {
+        statusElem.textContent = "Chyba spuštění: " + err;
+        console.error(err);
+      }
+    }
+
+    function stopScan() {
+      if (controls) {
+        controls.stop();
+        controls = null;
+      }
+      statusElem.textContent = "⏹️ Skenování zastaveno";
+    }
+
+    document.getElementById("startBtn").addEventListener("click", startScan);
+    document.getElementById("stopBtn").addEventListener("click", stopScan);
+
+    loadCameras();
+
+    if (location.protocol !== "https:" && location.hostname !== "localhost") {
+      statusElem.textContent = "⚠️ Kamera funguje jen na HTTPS nebo localhost!";
+    }
+  </script>
+</body>
+</html>
